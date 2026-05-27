@@ -162,8 +162,8 @@
         <div class="config-section">
             <div class="grid-2">
                 <div>
-                    <label><strong><span class="step-label">PASSO 1</span> Arquivo de Matrículas (Taxa de Participação):</strong></label>
-                    <p style="font-size: 11px; margin: 2px 0; color: #64748b;">Carregue o CSV/XLSX com o total de alunos por turma para cruzar os dados.</p>
+                    <label><strong><span class="step-label">PASSO 1</span> Arquivo de Matrículas por Escola:</strong></label>
+                    <p style="font-size: 11px; margin: 2px 0; color: #64748b;">Carregue o CSV/XLSX com o nome da Escola e o Total de Matrículas.</p>
                     <input type="file" id="matriculasFileInput" accept=".xlsx, .xls, .csv" />
                     <div id="statusMatriculas" style="font-size: 12px; color: #10b981; font-weight: 600; margin-top: 5px;"></div>
                 </div>
@@ -268,11 +268,11 @@
     let allSchools = []; 
     let logoBase64 = "";
     
-    // Variáveis para a Taxa de Participação
-    let matriculasPorTurma = {};
+    // Variáveis para a Taxa de Participação (Agrupado por Escola)
+    let matriculasPorEscola = {};
     let usaTaxaParticipacao = false;
 
-    // --- LEITURA DO ARQUIVO DE MATRÍCULAS ---
+    // --- LEITURA DO ARQUIVO DE MATRÍCULAS POR ESCOLA ---
     document.getElementById('matriculasFileInput').addEventListener('change', async function(e) {
         const file = e.target.files[0];
         if (!file) {
@@ -288,7 +288,7 @@
             const fileObj = await readFileAsArrayBuffer(file);
             let workbook;
             
-            // Verifica se é CSV para forçar leitura de string, útil para evitar erros de charset
+            // Tratamento especial para CSV (evita problemas de encoding)
             if(file.name.toLowerCase().endsWith('.csv')) {
                 const textDecoder = new TextDecoder('utf-8');
                 const csvStr = textDecoder.decode(fileObj.data);
@@ -300,36 +300,40 @@
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
             const jsonData = XLSX.utils.sheet_to_json(firstSheet, {defval: ""});
             
-            matriculasPorTurma = {};
-            let turmasMapeadas = 0;
+            matriculasPorEscola = {};
+            let escolasMapeadas = 0;
 
             jsonData.forEach(row => {
                 const keys = Object.keys(row);
-                // Procura automaticamente colunas que representam Turma e Total de Matrículas
-                let turmaKey = keys.find(k => k.toLowerCase().includes('turma') || k.toLowerCase().includes('sala'));
+                // Procura a coluna da Escola e a coluna de Matrículas
+                let escolaKey = keys.find(k => k.toLowerCase().includes('escola') || k.toLowerCase().includes('unidade'));
                 let matriculaKey = keys.find(k => k.toLowerCase().includes('matricula') || k.toLowerCase().includes('matrícula') || k.toLowerCase().includes('total'));
                 
-                // Fallback para as colunas 1 e 2 se os nomes fugirem do padrão
-                if (!turmaKey) turmaKey = keys[0];
-                if (!matriculaKey) matriculaKey = keys[1];
+                // Fallback caso os cabeçalhos não tenham esses nomes específicos
+                if (!escolaKey) escolaKey = keys[0];
+                if (!matriculaKey) matriculaKey = keys[keys.length - 1]; // Geralmente o total é a última coluna
                 
-                if (row[turmaKey] && row[matriculaKey]) {
-                    const tName = String(row[turmaKey]).trim().toUpperCase();
-                    const tMat = parseInt(row[matriculaKey]) || 0;
+                if (row[escolaKey] && row[matriculaKey]) {
+                    let eName = String(row[escolaKey]).trim().toUpperCase();
                     
-                    if(tName !== "" && tMat > 0) {
-                        matriculasPorTurma[tName] = tMat;
-                        turmasMapeadas++;
+                    // Remove códigos CIE no final do nome (ex: "ESCOLA - 903188" vira apenas "ESCOLA")
+                    eName = eName.replace(/\s*-\s*\d+$/, '').trim(); 
+
+                    const eMat = parseInt(row[matriculaKey]) || 0;
+                    
+                    if(eName !== "" && eMat > 0) {
+                        matriculasPorEscola[eName] = eMat;
+                        escolasMapeadas++;
                     }
                 }
             });
 
-            usaTaxaParticipacao = turmasMapeadas > 0;
+            usaTaxaParticipacao = escolasMapeadas > 0;
             if (usaTaxaParticipacao) {
-                document.getElementById('statusMatriculas').innerText = `✓ Sucesso: ${turmasMapeadas} turmas mapeadas para cálculo de participação.`;
+                document.getElementById('statusMatriculas').innerText = `✓ Sucesso: ${escolasMapeadas} escolas mapeadas para cálculo de participação.`;
             } else {
                 document.getElementById('statusMatriculas').style.color = "#dc2626";
-                document.getElementById('statusMatriculas').innerText = "⚠ Nenhuma turma válida encontrada no arquivo.";
+                document.getElementById('statusMatriculas').innerText = "⚠ Nenhuma escola válida encontrada no arquivo.";
             }
 
         } catch (error) {
@@ -340,13 +344,13 @@
         }
     });
 
-
     // --- FUNÇÕES AUXILIARES ---
     function extractSchoolNameFromFile(filename) {
         if (!filename) return "";
         let nameWithoutExt = filename.replace(/\.[^/.]+$/, ""); 
         nameWithoutExt = nameWithoutExt.replace(/[^\w\s\u00C0-\u00FF-]/g, "");
         nameWithoutExt = nameWithoutExt.replace(/\b\w/g, char => char.toUpperCase());
+        // Pega as duas primeiras palavras para ser a "chave de busca"
         let words = nameWithoutExt.trim().split(/\s+/);
         return words.slice(0, 2).join(" ");
     }
@@ -401,16 +405,32 @@
 
             filesData.forEach(fileObj => {
                 const workbook = XLSX.read(fileObj.data, {type: 'array'});
-                const schoolName = extractSchoolNameFromFile(fileObj.name);
+                const extractedName = extractSchoolNameFromFile(fileObj.name);
+                
+                let matriculadosDaEscola = 0;
+                
+                // Busca o total de matriculados da escola fazendo um cruzamento de texto parcial
+                if (usaTaxaParticipacao) {
+                    let searchKey = extractedName.toUpperCase();
+                    for (let eName in matriculasPorEscola) {
+                        if (eName.includes(searchKey) || searchKey.includes(eName)) {
+                            matriculadosDaEscola = matriculasPorEscola[eName];
+                            break;
+                        }
+                    }
+                }
 
                 let schoolData = {
-                    nome: schoolName,
-                    alunos: 0, // Presentes
-                    matriculados: 0, // Total Matrículas (Baseado na tabela extra)
+                    nome: extractedName,
+                    alunos: 0, // Presentes calculados dinamicamente pelas abas
+                    matriculados: matriculadosDaEscola, // Fixo para a escola toda
                     results: {}, 
                     totalAcertos: 0,
                     totalPossiveis: 0
                 };
+
+                // Variável auxiliar para não somar as presenças da mesma turma 2 vezes se houver abas duplicadas
+                let turmasJaContadas = new Set();
 
                 workbook.SheetNames.forEach(sheetName => {
                     const sheet = workbook.Sheets[sheetName];
@@ -438,9 +458,6 @@
                         }
                     });
 
-                    // Variável auxiliar para não somar as matrículas da mesma turma 2 vezes se houver abas duplicadas
-                    let turmasJaContadas = new Set();
-
                     jsonData.forEach(row => {
                         if (!row[classColName]) return;
                         
@@ -449,29 +466,9 @@
                         
                         if (alunosPresentes === 0) return;
 
-                        // Incrementa alunos presentes apenas 1 vez por turma (a primeira vez que a turma aparece)
-                        // Em algumas extrações, a mesma turma pode aparecer em múltiplas abas
+                        // Soma os alunos presentes apenas 1 vez por turma (evitando duplicidade nas abas)
                         if (!turmasJaContadas.has(turmaOriginal)) {
                             schoolData.alunos += alunosPresentes;
-                            
-                            if (usaTaxaParticipacao) {
-                                // Tenta o Match exato ou parcial da turma
-                                let matchMatricula = matriculasPorTurma[turmaOriginal];
-                                if (!matchMatricula) {
-                                    // Match parcial (A turma da planiha está contida no nome grande da Secretaria ou vice-versa)
-                                    const chaveAproximada = Object.keys(matriculasPorTurma).find(k => k.includes(turmaOriginal) || turmaOriginal.includes(k));
-                                    if (chaveAproximada) {
-                                        matchMatricula = matriculasPorTurma[chaveAproximada];
-                                    }
-                                }
-
-                                if (matchMatricula) {
-                                    schoolData.matriculados += matchMatricula;
-                                } else {
-                                    // Fallback: se a turma não constar na lista de matrículas, assumimos 100% de presença para não prejudicar o cálculo geral
-                                    schoolData.matriculados += alunosPresentes;
-                                }
-                            }
                             turmasJaContadas.add(turmaOriginal);
                         }
 
@@ -670,18 +667,31 @@
 
         schoolsToSort.forEach(school => {
             globalAlunos += school.alunos;
-            if(usaTaxaParticipacao) globalMatriculados += school.matriculados;
+            if(usaTaxaParticipacao && school.matriculados > 0) {
+                globalMatriculados += school.matriculados;
+            } else if (usaTaxaParticipacao) {
+                // Se a escola não foi encontrada na lista de matriculas, usamos os presentes para não distorcer a rede
+                globalMatriculados += school.alunos; 
+            }
             
             rowsHtml += `<tr>
                             <td class="col-text">${school.nome}</td>
                             <td>${school.alunos}</td>`;
 
             if(usaTaxaParticipacao) {
-                let taxaParticipacao = school.matriculados > 0 ? (school.alunos / school.matriculados) * 100 : 0;
-                // Evita distorções visuais caso alunos > matriculados por inconsistência nas bases
-                if (taxaParticipacao > 100) taxaParticipacao = 100;
+                let taxaParticipacao = 0;
+                let exibicaoMatriculados = "-";
                 
-                rowsHtml += `<td>${school.matriculados}</td>
+                if (school.matriculados > 0) {
+                    taxaParticipacao = (school.alunos / school.matriculados) * 100;
+                    if (taxaParticipacao > 100) taxaParticipacao = 100;
+                    exibicaoMatriculados = school.matriculados;
+                } else {
+                    // Fallback se não encontrou o nome no arquivo
+                    taxaParticipacao = 100; 
+                }
+                
+                rowsHtml += `<td>${exibicaoMatriculados}</td>
                              <td class="cell-blue">${taxaParticipacao.toFixed(1).replace('.', ',')}%</td>`;
             }
 
