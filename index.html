@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consolidador Geral AVAP - Múltiplas Escolas</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+        :root {
+            --primary-color: #0f172a; 
+            --accent-color: #3b82f6;
+            --text-color: #1e293b;
+            --bg-color: #f8fafc;
+            --border-color: #cbd5e1;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 15px;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        h1, h2, h3 { color: var(--primary-color); margin-top: 0; }
+        
+        .config-section {
+            background: #f1f5f9;
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .full-width { grid-column: span 2; }
+        
+        input[type="text"], input[type="number"], input[type="file"], textarea, select {
+            width: 100%; padding: 8px; margin-top: 4px;
+            border: 1px solid #94a3b8; border-radius: 4px;
+            box-sizing: border-box; font-family: 'Inter', sans-serif;
+        }
+        
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        textarea { resize: vertical; min-height: 60px; }
+
+        .btn {
+            background-color: var(--accent-color); color: white;
+            padding: 10px 20px; border: none; border-radius: 4px;
+            cursor: pointer; font-size: 14px; font-weight: 600;
+            margin: 5px;
+        }
+        .btn:hover { background-color: #2563eb; }
+        .btn-success { background-color: #10b981; }
+        .btn-success:hover { background-color: #059669; }
+        .btn-pdf { background-color: #dc2626; }
+        .btn-pdf:hover { background-color: #b91c1c; }
+
+        .config-table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 13px; }
+        .config-table th, .config-table td { border: 1px solid #94a3b8; padding: 6px; text-align: left; vertical-align: middle; }
+        .config-table th { background: #e2e8f0; }
+
+        .doc-header {
+            display: flex; align-items: center;
+            border-bottom: 3px solid var(--primary-color);
+            padding-bottom: 15px; margin-bottom: 15px;
+            page-break-inside: avoid;
+        }
+        .doc-logo { max-width: 90px; max-height: 90px; margin-right: 20px; object-fit: contain; }
+        .doc-title { font-size: 20px; font-weight: 700; margin: 0 0 4px 0; color: var(--primary-color); text-transform: uppercase; }
+        .doc-subtitle { font-size: 15px; font-weight: 600; color: #475569; margin: 0 0 6px 0; }
+        .doc-intro { font-size: 12px; color: #64748b; white-space: pre-wrap; line-height: 1.4; }
+
+        .matrix-table {
+            width: 100%; border-collapse: collapse; font-size: 11px;
+        }
+        .matrix-table th, .matrix-table td {
+            border: 1px solid #94a3b8;
+            padding: 4px 2px;
+            text-align: center; vertical-align: middle;
+            white-space: nowrap;
+        }
+        .matrix-table thead th {
+            background-color: var(--primary-color); color: white;
+            font-weight: 600; padding: 6px 2px;
+            white-space: normal;
+        }
+        
+        .col-text { text-align: left !important; font-weight: 600; background-color: #f8fafc; white-space: normal !important; min-width: 150px; }
+        .col-total { font-weight: 700; background-color: #f1f5f9; border-left: 2px solid #64748b !important; }
+
+        .cell-red { background-color: #ff1744 !important; color: #ffffff !important; font-weight: 700; text-shadow: 0 0 2px rgba(0,0,0,0.3); }
+        .cell-yellow { background-color: #ffea00 !important; color: #000000 !important; font-weight: 700; }
+        .cell-green { background-color: #00e676 !important; color: #000000 !important; font-weight: 700; text-shadow: 0 0 1px rgba(255,255,255,0.5); }
+        .cell-blue { background-color: #e0f2fe !important; color: #0369a1 !important; font-weight: 700; }
+        .cell-empty { background-color: #f8fafc; color: #cbd5e1; }
+
+        .row-global td {
+            border-top: 2px solid var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+            font-size: 13px; font-weight: 700;
+        }
+        .row-global .col-text { background-color: #e2e8f0; color: var(--primary-color); text-transform: uppercase; }
+
+        .filename-input-group { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+        .filename-input-group input { flex: 1; }
+
+        .matrix-table tr { page-break-inside: avoid !important; }
+        .matrix-table thead { display: table-header-group; }
+
+        .step-label { font-size: 12px; font-weight: 700; color: white; background: var(--accent-color); padding: 2px 6px; border-radius: 4px; margin-right: 5px; }
+
+        #loadingOverlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.8); z-index: 1000; justify-content: center; align-items: center;
+            font-size: 18px; font-weight: bold; color: var(--primary-color); flex-direction: column;
+        }
+
+        @media print {
+            @page { size: landscape; margin: 10mm; }
+            body { background: white; padding: 0; }
+            .no-print { display: none !important; }
+            .container { box-shadow: none; padding: 0; margin: 0; width: 100%; }
+            .matrix-table th, .matrix-table td { border: 1px solid #000; font-size: 10pt; }
+            .matrix-table thead th { background-color: #e2e8f0 !important; color: #000 !important; -webkit-print-color-adjust: exact; }
+            .cell-red { background-color: #ff1744 !important; color: #ffffff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .cell-yellow { background-color: #ffea00 !important; color: #000000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .cell-green { background-color: #00e676 !important; color: #000000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .cell-blue { background-color: #e0f2fe !important; color: #0369a1 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .row-global .col-text { background-color: #cbd5e1 !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
+        }
+    </style>
+</head>
+<body>
+
+<div id="loadingOverlay">
+    <div id="loadingText">Processando, por favor aguarde...</div>
+</div>
+
+<div class="container">
+    <div class="no-print">
+        <h1>Consolidador Geral AVAP</h1>
+        
+        <div class="config-section">
+            <div class="grid-2">
+                <div>
+                    <label><strong><span class="step-label">PASSO 1</span> Arquivo de Matrículas (Taxa de Participação):</strong></label>
+                    <p style="font-size: 11px; margin: 2px 0; color: #64748b;">Carregue o CSV/XLSX com o total de alunos por turma para cruzar os dados.</p>
+                    <input type="file" id="matriculasFileInput" accept=".xlsx, .xls, .csv" />
+                    <div id="statusMatriculas" style="font-size: 12px; color: #10b981; font-weight: 600; margin-top: 5px;"></div>
+                </div>
+                <div>
+                    <label><strong><span class="step-label">PASSO 2</span> Planilhas das Escolas (.xlsx):</strong></label>
+                    <p style="font-size: 11px; margin: 2px 0; color: #64748b;">Selecione VÁRIOS arquivos gerados pela AVAP de uma vez.</p>
+                    <input type="file" id="excelFileInput" accept=".xlsx, .xls" multiple />
+                </div>
+                <div>
+                    <label><strong>Logotipo (Opcional):</strong></label>
+                    <input type="file" id="logoInput" accept="image/*" />
+                </div>
+                
+                <div class="full-width">
+                    <label><strong>Título do Documento:</strong></label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="docTitle" value="CONSOLIDADO GERAL - AVALIAÇÃO DE VERIFICAÇÃO DE APRENDIZAGEM" style="flex: 2;"/>
+                        <input type="text" id="docSubtitle" placeholder="Subtítulo (Ex: Diretoria de Ensino / Rede Municipal)" style="flex: 1;"/>
+                    </div>
+                </div>
+                <div class="full-width">
+                    <label><strong>Metodologia:</strong></label>
+                    <textarea id="docIntro">O cálculo consolida os dados de todas as escolas selecionadas. Unidades com maior contingente de alunos ou disciplinas com mais questões exercem impacto proporcionalmente maior no resultado final, garantindo uma média global ponderada precisa para toda a rede.</textarea>
+                </div>
+                <div class="full-width">
+                    <label><strong>Nome do Arquivo PDF:</strong></label>
+                    <div class="filename-input-group">
+                        <input type="text" id="pdfFilename" value="CONSOLIDADO GERAL AVAP" placeholder="Nome do arquivo" style="flex: 1;">
+                        <span style="font-weight: 600;">.pdf</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="configArea" class="config-section no-print" style="display: none;">
+        <h3>Configuração do Relatório Final</h3>
+        <div class="grid-2">
+            <div>
+                <table class="config-table" id="subjectsTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px; text-align: center;">Incluir</th>
+                            <th>Nome Original</th>
+                            <th>Nome Exportado</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div>
+                <table class="config-table">
+                    <tr><th colspan="2">Ordenação do Relatório</th></tr>
+                    <tr>
+                        <td>Ordenar por:</td>
+                        <td>
+                            <select id="sortBy" onchange="autoUpdate()">
+                                <option value="nome">Nome da Escola</option>
+                                <option value="geral">Média Geral</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Ordem:</td>
+                        <td>
+                            <select id="sortOrder" onchange="autoUpdate()">
+                                <option value="asc">Crescente (A-Z / Menor para Maior)</option>
+                                <option value="desc">Decrescente (Z-A / Maior para Menor)</option>
+                            </select>
+                        </td>
+                    </tr>
+                </table>
+
+                <table class="config-table" style="margin-top: 15px;">
+                    <tr><th colspan="2">Semaforização (%)</th></tr>
+                    <tr>
+                        <td>Abaixo de (Vermelho)</td>
+                        <td><input type="number" id="limitRed" value="50" onchange="autoUpdate()" onkeyup="autoUpdate()"></td>
+                    </tr>
+                    <tr>
+                        <td>Acima de (Verde)</td>
+                        <td><input type="number" id="limitGreen" value="70" onchange="autoUpdate()" onkeyup="autoUpdate()"></td>
+                    </tr>
+                </table>
+                <div style="text-align: right; margin-top: 15px;">
+                    <button class="btn btn-success" onclick="generateUnifiedReport()">Gerar Tabela Consolidada</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="actionsArea" class="no-print" style="display:none; text-align: right; margin-bottom: 15px;">
+        <button class="btn" onclick="window.print()">🖨️ Imprimir</button>
+        <button class="btn btn-pdf" onclick="saveAsPDF()">💾 Salvar como PDF</button>
+    </div>
+
+    <div id="reportsArea"></div>
+</div>
+
+<script>
+    let globalSubjects = {}; 
+    let allSchools = []; 
+    let logoBase64 = "";
+    
+    // Variáveis para a Taxa de Participação
+    let matriculasPorTurma = {};
+    let usaTaxaParticipacao = false;
+
+    // --- LEITURA DO ARQUIVO DE MATRÍCULAS ---
+    document.getElementById('matriculasFileInput').addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (!file) {
+            usaTaxaParticipacao = false;
+            document.getElementById('statusMatriculas').innerText = "";
+            return;
+        }
+
+        document.getElementById('loadingOverlay').style.display = 'flex';
+        document.getElementById('loadingText').innerText = "Processando arquivo de matrículas...";
+
+        try {
+            const fileObj = await readFileAsArrayBuffer(file);
+            let workbook;
+            
+            // Verifica se é CSV para forçar leitura de string, útil para evitar erros de charset
+            if(file.name.toLowerCase().endsWith('.csv')) {
+                const textDecoder = new TextDecoder('utf-8');
+                const csvStr = textDecoder.decode(fileObj.data);
+                workbook = XLSX.read(csvStr, {type: 'string'});
+            } else {
+                workbook = XLSX.read(fileObj.data, {type: 'array'});
+            }
+
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, {defval: ""});
+            
+            matriculasPorTurma = {};
+            let turmasMapeadas = 0;
+
+            jsonData.forEach(row => {
+                const keys = Object.keys(row);
+                // Procura automaticamente colunas que representam Turma e Total de Matrículas
+                let turmaKey = keys.find(k => k.toLowerCase().includes('turma') || k.toLowerCase().includes('sala'));
+                let matriculaKey = keys.find(k => k.toLowerCase().includes('matricula') || k.toLowerCase().includes('matrícula') || k.toLowerCase().includes('total'));
+                
+                // Fallback para as colunas 1 e 2 se os nomes fugirem do padrão
+                if (!turmaKey) turmaKey = keys[0];
+                if (!matriculaKey) matriculaKey = keys[1];
+                
+                if (row[turmaKey] && row[matriculaKey]) {
+                    const tName = String(row[turmaKey]).trim().toUpperCase();
+                    const tMat = parseInt(row[matriculaKey]) || 0;
+                    
+                    if(tName !== "" && tMat > 0) {
+                        matriculasPorTurma[tName] = tMat;
+                        turmasMapeadas++;
+                    }
+                }
+            });
+
+            usaTaxaParticipacao = turmasMapeadas > 0;
+            if (usaTaxaParticipacao) {
+                document.getElementById('statusMatriculas').innerText = `✓ Sucesso: ${turmasMapeadas} turmas mapeadas para cálculo de participação.`;
+            } else {
+                document.getElementById('statusMatriculas').style.color = "#dc2626";
+                document.getElementById('statusMatriculas').innerText = "⚠ Nenhuma turma válida encontrada no arquivo.";
+            }
+
+        } catch (error) {
+            console.error("Erro ao ler matrículas:", error);
+            alert("Erro ao ler o arquivo de matrículas. Verifique o formato.");
+        } finally {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+    });
+
+
+    // --- FUNÇÕES AUXILIARES ---
+    function extractSchoolNameFromFile(filename) {
+        if (!filename) return "";
+        let nameWithoutExt = filename.replace(/\.[^/.]+$/, ""); 
+        nameWithoutExt = nameWithoutExt.replace(/[^\w\s\u00C0-\u00FF-]/g, "");
+        nameWithoutExt = nameWithoutExt.replace(/\b\w/g, char => char.toUpperCase());
+        let words = nameWithoutExt.trim().split(/\s+/);
+        return words.slice(0, 2).join(" ");
+    }
+
+    function saveAsPDF() {
+        const element = document.getElementById('reportsArea');
+        const fileNameBase = document.getElementById('pdfFilename').value || 'Consolidado';
+        const fileName = `${fileNameBase}.pdf`;
+        
+        const opt = {
+            margin: [0.4, 0.4, 0.4, 0.4],
+            filename: fileName,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, letterRendering: true, useCORS: true },
+            jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' },
+            pagebreak: { mode: ['avoid-all', 'css'] }
+        };
+        html2pdf().set(opt).from(element).save();
+    }
+
+    document.getElementById('logoInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(event) { logoBase64 = event.target.result; autoUpdate(); };
+        reader.readAsDataURL(file);
+    });
+
+    function readFileAsArrayBuffer(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve({ name: file.name, data: new Uint8Array(e.target.result) });
+            reader.onerror = e => reject(e);
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    // --- PROCESSAMENTO DAS PLANILHAS AVAP ---
+    document.getElementById('excelFileInput').addEventListener('change', async function(e) {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        document.getElementById('loadingOverlay').style.display = 'flex';
+        document.getElementById('loadingText').innerText = "Processando planilhas das escolas...";
+        
+        globalSubjects = {};
+        allSchools = [];
+
+        try {
+            const filePromises = Array.from(files).map(file => readFileAsArrayBuffer(file));
+            const filesData = await Promise.all(filePromises);
+
+            filesData.forEach(fileObj => {
+                const workbook = XLSX.read(fileObj.data, {type: 'array'});
+                const schoolName = extractSchoolNameFromFile(fileObj.name);
+
+                let schoolData = {
+                    nome: schoolName,
+                    alunos: 0, // Presentes
+                    matriculados: 0, // Total Matrículas (Baseado na tabela extra)
+                    results: {}, 
+                    totalAcertos: 0,
+                    totalPossiveis: 0
+                };
+
+                workbook.SheetNames.forEach(sheetName => {
+                    const sheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(sheet, {defval: ""});
+                    if (jsonData.length === 0) return;
+
+                    const headers = Object.keys(jsonData[0]);
+                    const classColName = headers[0]; 
+
+                    let sheetSubjectMap = {}; 
+                    headers.forEach(h => {
+                        if (h === classColName || h.includes("Total de Alunos") || h.includes("Total de Acertos") || h.includes("Escola")) return;
+                        
+                        const matchName = h.match(/Acertos em (.*?)\s*\(/);
+                        let baseName = matchName ? matchName[1].trim() : h.trim();
+                        
+                        let qCount = 1;
+                        const matchQ = h.match(/\((Questões.*?)\)/);
+                        if (matchQ) qCount = (matchQ[1].match(/,/g) || []).length + 1;
+
+                        sheetSubjectMap[h] = { baseName, qCount };
+                        
+                        if (!globalSubjects[baseName]) {
+                            globalSubjects[baseName] = { exportName: baseName };
+                        }
+                    });
+
+                    // Variável auxiliar para não somar as matrículas da mesma turma 2 vezes se houver abas duplicadas
+                    let turmasJaContadas = new Set();
+
+                    jsonData.forEach(row => {
+                        if (!row[classColName]) return;
+                        
+                        const turmaOriginal = String(row[classColName]).trim().toUpperCase();
+                        const alunosPresentes = parseInt(row["Total de Alunos"]) || 0;
+                        
+                        if (alunosPresentes === 0) return;
+
+                        // Incrementa alunos presentes apenas 1 vez por turma (a primeira vez que a turma aparece)
+                        // Em algumas extrações, a mesma turma pode aparecer em múltiplas abas
+                        if (!turmasJaContadas.has(turmaOriginal)) {
+                            schoolData.alunos += alunosPresentes;
+                            
+                            if (usaTaxaParticipacao) {
+                                // Tenta o Match exato ou parcial da turma
+                                let matchMatricula = matriculasPorTurma[turmaOriginal];
+                                if (!matchMatricula) {
+                                    // Match parcial (A turma da planiha está contida no nome grande da Secretaria ou vice-versa)
+                                    const chaveAproximada = Object.keys(matriculasPorTurma).find(k => k.includes(turmaOriginal) || turmaOriginal.includes(k));
+                                    if (chaveAproximada) {
+                                        matchMatricula = matriculasPorTurma[chaveAproximada];
+                                    }
+                                }
+
+                                if (matchMatricula) {
+                                    schoolData.matriculados += matchMatricula;
+                                } else {
+                                    // Fallback: se a turma não constar na lista de matrículas, assumimos 100% de presença para não prejudicar o cálculo geral
+                                    schoolData.matriculados += alunosPresentes;
+                                }
+                            }
+                            turmasJaContadas.add(turmaOriginal);
+                        }
+
+                        // Calcular acertos das disciplinas
+                        for (let rawHeader in sheetSubjectMap) {
+                            const info = sheetSubjectMap[rawHeader];
+                            const val = row[rawHeader];
+                            
+                            if (val !== undefined && val.toString().trim() !== "") {
+                                const acertos = parseInt(val) || 0;
+                                const possiveis = alunosPresentes * info.qCount; 
+                                
+                                if (!schoolData.results[info.baseName]) {
+                                    schoolData.results[info.baseName] = { acertos: 0, possiveis: 0 };
+                                }
+                                
+                                schoolData.results[info.baseName].acertos += acertos;
+                                schoolData.results[info.baseName].possiveis += possiveis;
+                                
+                                schoolData.totalAcertos += acertos;
+                                schoolData.totalPossiveis += possiveis;
+                            }
+                        }
+                    });
+                });
+                
+                if(schoolData.alunos > 0) {
+                    allSchools.push(schoolData);
+                }
+            });
+
+            allSchools.sort((a, b) => a.nome.localeCompare(b.nome));
+
+            renderSubjectsConfig();
+            document.getElementById('configArea').style.display = 'block';
+            document.getElementById('reportsArea').innerHTML = '';
+            document.getElementById('actionsArea').style.display = 'none';
+
+        } catch (error) {
+            console.error("Erro ao processar arquivos:", error);
+            alert("Ocorreu um erro ao processar as planilhas. Verifique o console.");
+        } finally {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+    });
+
+    function renderSubjectsConfig() {
+        const tbody = document.querySelector('#subjectsTable tbody');
+        tbody.innerHTML = '';
+        const keys = Object.keys(globalSubjects).sort(); 
+        
+        const sortBySelect = document.getElementById('sortBy');
+        const currentSortBy = sortBySelect.value;
+        let optionsHtml = `<option value="nome">Nome da Escola</option><option value="geral">Média Geral</option>`;
+        
+        keys.forEach((key, index) => {
+            tbody.innerHTML += `
+                <tr>
+                    <td style="text-align: center;">
+                        <input type="checkbox" data-key="${key}" checked title="Incluir no relatório final" onchange="autoUpdate()">
+                    </td>
+                    <td style="font-size:12px; font-weight:600;">${key}</td>
+                    <td><input type="text" id="name_${index}" value="${globalSubjects[key].exportName}" style="padding:4px; font-size:12px;" data-key="${key}" onkeyup="autoUpdate()"></td>
+                </tr>
+            `;
+            optionsHtml += `<option value="${key}">Disciplina: ${key}</option>`;
+        });
+
+        sortBySelect.innerHTML = optionsHtml;
+        if ([...sortBySelect.options].some(o => o.value === currentSortBy)) {
+            sortBySelect.value = currentSortBy;
+        }
+    }
+
+    function autoUpdate() {
+        if (document.getElementById('actionsArea').style.display === 'block') {
+            generateUnifiedReport();
+        }
+    }
+
+    function getSemaforoClass(pct, limitRed, limitGreen) {
+        if (pct < 0) return "cell-empty"; 
+        if (pct < limitRed) return "cell-red";
+        if (pct >= limitGreen) return "cell-green";
+        return "cell-yellow";
+    }
+
+    function generateUnifiedReport() {
+        const reportsArea = document.getElementById('reportsArea');
+        reportsArea.innerHTML = '';
+
+        const docTitle = document.getElementById('docTitle').value;
+        const docSubtitle = document.getElementById('docSubtitle').value;
+        const docIntro = document.getElementById('docIntro').value;
+        const limitRed = parseFloat(document.getElementById('limitRed').value);
+        const limitGreen = parseFloat(document.getElementById('limitGreen').value);
+
+        const inputs = document.querySelectorAll('input[id^="name_"]');
+        let orderedKeys = [];
+        
+        inputs.forEach(input => {
+            const key = input.getAttribute('data-key');
+            globalSubjects[key].exportName = input.value;
+            
+            const checkbox = document.querySelector(`input[type="checkbox"][data-key="${key}"]`);
+            if (checkbox && checkbox.checked) {
+                orderedKeys.push(key);
+            }
+        });
+
+        if (orderedKeys.length === 0) {
+            document.getElementById('actionsArea').style.display = 'none';
+            reportsArea.innerHTML = '<p style="color: #dc2626; font-weight: 600; text-align: center;">Selecione pelo menos uma disciplina para exibir o relatório.</p>';
+            return;
+        }
+
+        let schoolsToSort = allSchools.map(school => {
+            let filteredAcertos = 0;
+            let filteredPossiveis = 0;
+            let subjectPcts = {}; 
+
+            orderedKeys.forEach(k => {
+                const res = school.results[k];
+                if (res) {
+                    filteredAcertos += res.acertos;
+                    filteredPossiveis += res.possiveis;
+                    subjectPcts[k] = res.possiveis > 0 ? (res.acertos / res.possiveis) * 100 : -1;
+                } else {
+                    subjectPcts[k] = -1; 
+                }
+            });
+
+            let rowPct = filteredPossiveis > 0 ? (filteredAcertos / filteredPossiveis) * 100 : -1;
+
+            return {
+                ...school,
+                rowPct: rowPct,
+                subjectPcts: subjectPcts,
+                filteredAcertos: filteredAcertos,
+                filteredPossiveis: filteredPossiveis
+            };
+        });
+
+        const sortBy = document.getElementById('sortBy').value;
+        const sortOrder = document.getElementById('sortOrder').value;
+
+        schoolsToSort.sort((a, b) => {
+            let valA, valB;
+
+            if (sortBy === 'nome') {
+                return sortOrder === 'asc' ? a.nome.localeCompare(b.nome) : b.nome.localeCompare(a.nome);
+            } else if (sortBy === 'geral') {
+                valA = a.rowPct;
+                valB = b.rowPct;
+            } else {
+                valA = a.subjectPcts[sortBy] !== undefined ? a.subjectPcts[sortBy] : -1;
+                valB = b.subjectPcts[sortBy] !== undefined ? b.subjectPcts[sortBy] : -1;
+            }
+
+            if (valA === valB) {
+                return a.nome.localeCompare(b.nome);
+            }
+
+            return sortOrder === 'asc' ? valA - valB : valB - valA;
+        });
+
+        let html = `<div class="doc-header">`;
+        if (logoBase64) html += `<img src="${logoBase64}" class="doc-logo" alt="Logo">`;
+        html += `<div>
+                    <h1 class="doc-title">${docTitle}</h1>
+                    ${docSubtitle ? `<h2 class="doc-subtitle">${docSubtitle}</h2>` : ''}
+                    ${docIntro ? `<div class="doc-intro">${docIntro}</div>` : ''}
+                 </div></div>`;
+
+        html += `<table class="matrix-table"><thead><tr>
+                    <th style="min-width: 200px;">Unidade Escolar</th>
+                    <th title="Alunos que realizaram a prova">Alunos<br>(Presentes)</th>`;
+        
+        if(usaTaxaParticipacao) {
+            html += `<th title="Total de alunos matriculados">Total<br>Matric.</th>
+                     <th title="Taxa de Participação">Partic.<br>(%)</th>`;
+        }
+
+        orderedKeys.forEach(k => html += `<th>${globalSubjects[k].exportName}</th>`);
+        html += `   <th>Média<br>Escola</th>
+                  </tr></thead><tbody>`;
+
+        let globalAlunos = 0;
+        let globalMatriculados = 0;
+        let globalAcertos = 0;
+        let globalPossiveis = 0;
+        let resumoComp = {};
+        orderedKeys.forEach(k => resumoComp[k] = { acertos: 0, possiveis: 0 });
+
+        let rowsHtml = "";
+
+        schoolsToSort.forEach(school => {
+            globalAlunos += school.alunos;
+            if(usaTaxaParticipacao) globalMatriculados += school.matriculados;
+            
+            rowsHtml += `<tr>
+                            <td class="col-text">${school.nome}</td>
+                            <td>${school.alunos}</td>`;
+
+            if(usaTaxaParticipacao) {
+                let taxaParticipacao = school.matriculados > 0 ? (school.alunos / school.matriculados) * 100 : 0;
+                // Evita distorções visuais caso alunos > matriculados por inconsistência nas bases
+                if (taxaParticipacao > 100) taxaParticipacao = 100;
+                
+                rowsHtml += `<td>${school.matriculados}</td>
+                             <td class="cell-blue">${taxaParticipacao.toFixed(1).replace('.', ',')}%</td>`;
+            }
+
+            orderedKeys.forEach(k => {
+                const res = school.results[k];
+                if (!res) {
+                    rowsHtml += `<td class="cell-empty">-</td>`; 
+                } else {
+                    resumoComp[k].acertos += res.acertos;
+                    resumoComp[k].possiveis += res.possiveis;
+                    
+                    let pct = school.subjectPcts[k];
+                    rowsHtml += `<td class="${getSemaforoClass(pct, limitRed, limitGreen)}">${pct.toFixed(1).replace('.', ',')}%</td>`;
+                }
+            });
+
+            globalAcertos += school.filteredAcertos;
+            globalPossiveis += school.filteredPossiveis;
+            let rowPct = school.rowPct;
+            
+            if (rowPct === -1) {
+                rowsHtml += `<td class="col-total cell-empty">-</td>`;
+            } else {
+                rowsHtml += `<td class="col-total ${getSemaforoClass(rowPct, limitRed, limitGreen)}">${rowPct.toFixed(1).replace('.', ',')}%</td>`;
+            }
+            rowsHtml += `</tr>`;
+        });
+
+        // LINHA DE TOTAIS GLOBAIS
+        html += `<tr class="row-global">
+                    <td class="col-text">CONSOLIDADO GERAL</td>
+                    <td>${globalAlunos}</td>`;
+        
+        if (usaTaxaParticipacao) {
+            let taxaGeral = globalMatriculados > 0 ? (globalAlunos / globalMatriculados) * 100 : 0;
+            if (taxaGeral > 100) taxaGeral = 100;
+            html += `<td>${globalMatriculados}</td>
+                     <td class="cell-blue">${taxaGeral.toFixed(1).replace('.', ',')}%</td>`;
+        }
+        
+        orderedKeys.forEach(k => {
+            const sumAcertos = resumoComp[k].acertos;
+            const sumPossiveis = resumoComp[k].possiveis;
+            if (sumPossiveis === 0) {
+                html += `<td class="cell-empty">-</td>`;
+            } else {
+                let pct = (sumAcertos / sumPossiveis) * 100;
+                html += `<td class="${getSemaforoClass(pct, limitRed, limitGreen)}">${pct.toFixed(1).replace('.', ',')}%</td>`;
+            }
+        });
+
+        let geralPct = globalPossiveis > 0 ? (globalAcertos / globalPossiveis) * 100 : 0;
+        html += `<td class="col-total ${getSemaforoClass(geralPct, limitRed, limitGreen)}">${geralPct.toFixed(1).replace('.', ',')}%</td>`;
+        html += `</tr>`;
+
+        html += rowsHtml;
+        html += `</tbody></table>`;
+        reportsArea.innerHTML = html;
+
+        document.getElementById('actionsArea').style.display = 'block';
+    }
+    
+    document.getElementById('docTitle').addEventListener('keyup', autoUpdate);
+    document.getElementById('docSubtitle').addEventListener('keyup', autoUpdate);
+    document.getElementById('docIntro').addEventListener('keyup', autoUpdate);
+</script>
+
+</body>
+</html>
